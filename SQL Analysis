@@ -1,0 +1,67 @@
+using the ibm churn file dataset, I'll answer the following three questions using SQL queries along with their explanations.
+
+--  1 Considering the top 5 groups with the highest
+-- average monthly charges among churned customers,
+-- how can personalized offers be tailored based on age,
+-- gender, and contract type to potentially improve
+-- customer retention rates?
+
+SELECT 
+   CASE 
+      WHEN Age < 30 THEN 'Young Adults'
+      WHEN Age >= 30 AND Age < 50 THEN 'Middle-Aged Adults'
+      ELSE 'Seniors'
+   END AS Age_group,
+   Contract,
+   Gender,
+   ROUND(AVG(`Tenure in Months`), 2) AS AvgTenure,
+   ROUND(AVG(`Monthly Charge`), 2) AS AvgMonthlyCharge
+FROM ibm
+WHERE `Customer Status` LIKE '%churned%' -- Removed single quotes around the column name
+GROUP BY Age_group, Contract, Gender
+ORDER BY AvgMonthlyCharge DESC
+LIMIT 5;
+
+-- explanation: This query groups churned customers by age group, gender, and contract type, and calculates the average tenure and monthly charges for each group. It then sorts the results by the highest average monthly charges and shows the top 5 groups. The goal is to identify the most valuable customers who have left, based on how much they were paying, so we can tailor offers to try and keep similar customers in the future.
+
+-- 2 What are the feedback or complaints from
+-- those churned customers?
+SELECT `Churn Category`, COUNT(`Customer ID`) AS churn_count
+FROM ibm
+WHERE `Churn Label` LIKE "%Yes%"
+GROUP BY `Churn Category`
+ORDER BY churn_count DESC;
+
+SELECT `Churn Reason`, COUNT(`Customer ID`) AS churn_count
+FROM ibm
+WHERE `Churn Category` LIKE "%other%"
+GROUP BY `Churn Reason`
+ORDER BY churn_count DESC;
+
+-- explanation: This query identifies the reasons behind customer churn by counting how many customers fall into each churn category. It filters for churned customers (those with a churn label marked "Yes") and groups them by the churn category, such as price or service issues. The results are then sorted by the number of churned customers in each category, showing which churn reasons are most common.
+
+The second part breaks down customers who left for "other" reasons, listing specific churn reasons and how many people cited each. This query helps pinpoint the less common but still significant reasons why customers are leaving.
+
+-- 3 How does the payment method influence
+-- churn behavior?
+
+WITH churned_customers AS (
+    SELECT `Payment Method`, COUNT(`Customer ID`) AS churned_customers
+    FROM ibm
+    WHERE `Customer Status` LIKE '%Churned%'
+    GROUP BY `Payment Method`),
+present_customers AS (
+    SELECT  `Payment Method`, COUNT(`Customer ID`) AS present_customers
+    FROM ibm
+    WHERE `Customer Status` LIKE '%Churned%'
+    GROUP BY `Payment Method`)
+
+SELECT 
+    c.`Payment Method`, c.churned_customers, p.present_customers, 
+   c.churned_customers + p.present_customers AS total_customers, 
+    SUM(c.churned_customers + p.present_customers) OVER (ORDER BY c.`Payment Method`) AS running_total
+FROM churned_customers c 
+INNER JOIN present_customers p
+ON c.`Payment Method` = p.`Payment Method`;
+
+-- explanation: This query compares the number of churned customers against present customers for each payment method to see if there's a pattern between how people pay and whether they leave. It first creates two groups, one for churned customers and one for current customers, grouped by payment method. Then it joins these groups to calculate the total number of customers for each payment method and tracks the running total of all customers as it moves through the different methods. The query is useful for seeing if a particular payment method leads to more churn.
